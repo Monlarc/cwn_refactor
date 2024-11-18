@@ -16,7 +16,6 @@ This repository contains a refactored implementation of the Cell-Wave Networks (
 
 ### Notable Modifications
 - Implemented deterministic data splitting and loading using PyTorch generators
-- Simplified the cell complex construction process
 - Maintained core CWN architecture while removing unused features
 - Added comprehensive logging and visualization of training metrics
 
@@ -65,4 +64,4 @@ If you use this implementation, please cite the original CWN paper:
 
 ## Acknowledgments
 
-This implementation is based on the original CWN repository [include link], with modifications for modern framework compatibility and focused experimentation. 
+This implementation is based on the original CWN repository [\[include link\]](https://github.com/crisbodnar/cwn.git), with modifications for modern framework compatibility and focused experimentation. 
