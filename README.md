@@ -63,4 +63,4 @@ If you use this implementation, please cite the original CWN paper: [Weisfeiler 
 
 ## Acknowledgments
 
-This implementation is based on the original CWN repository [\[include link\]](https://github.com/crisbodnar/cwn.git), with modifications for modern framework compatibility and focused experimentation. 
+This implementation is based on the original [CWN repository](https://github.com/crisbodnar/cwn.git), with modifications for modern framework compatibility and focused experimentation. 
