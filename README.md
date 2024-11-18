@@ -60,7 +60,7 @@ The implementation ensures reproducible results through:
 ## Citation
 
 If you use this implementation, please cite the original CWN paper:
-[Include original paper citation]
+https://arxiv.org/abs/2106.12575
 
 ## Acknowledgments
 
