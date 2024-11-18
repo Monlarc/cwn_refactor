@@ -59,8 +59,7 @@ The implementation ensures reproducible results through:
 
 ## Citation
 
-If you use this implementation, please cite the original CWN paper:
-https://arxiv.org/abs/2106.12575
+If you use this implementation, please cite the original CWN paper: [Weisfeiler and Lehman Go Cellular: CW Networks](https://arxiv.org/abs/2106.12575)
 
 ## Acknowledgments
 
