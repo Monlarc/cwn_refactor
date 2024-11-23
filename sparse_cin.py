@@ -67,19 +67,6 @@ class EmbedABR(nn.Module):
         e_params = cochain_params[1] if len(cochain_params) >= 2 else None
         c_params = cochain_params[2] if len(cochain_params) == 3 else None
 
-        # Debug prints
-        # print(f"\nProcessing batch:")
-        # print(f"Nodes: {v_params.x.shape}")
-        # if e_params is not None:
-        #     print(f"Edges: {e_params.x.shape}")
-        #     print(f"Edge boundary index shape: {e_params.boundary_index.shape}")
-        #     print(f"Edge boundary index max values: {e_params.boundary_index.max(dim=1).values}")
-        # if c_params is not None:
-        #     print(f"Rings: {c_params.x.shape}")
-        #     if c_params.boundary_index is not None:
-        #         print(f"Ring boundary index shape: {c_params.boundary_index.shape}")
-        #         print(f"Ring boundary index max values: {c_params.boundary_index.max(dim=1).values}")
-
         # Convert one-hot encoded features to indices
         assert v_params.x is not None
         node_type = torch.argmax(v_params.x, dim=1).to(dtype=torch.long)

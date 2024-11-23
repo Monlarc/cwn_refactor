@@ -115,7 +115,7 @@ class SparseCINConv(nn.Module):
         hidden_channels: int = 64,
         max_dim: int = 2,
         eps: float = 0.,
-        train_eps: bool = False,
+        train_eps: bool = True,
     ):
         super().__init__()
         

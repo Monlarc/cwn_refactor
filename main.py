@@ -9,6 +9,7 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from gin import EmbedGIN
 
 def set_all_seeds(seed=42):
     """Set all seeds to make results reproducible"""
@@ -21,7 +22,7 @@ def set_all_seeds(seed=42):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
 
-def process_dataset(batch_size=32):
+def process_dataset(batch_size=32, seed=42):
     """Load and process the MUTAG dataset into cell complexes with rings."""
     # Load MUTAG dataset
     dataset = TUDataset(root='data/TUDataset', name='MUTAG')
@@ -46,8 +47,9 @@ def process_dataset(batch_size=32):
     # Split dataset with fixed seed
     # Ensure reproducibility
     g = torch.Generator()
-    g.manual_seed(42)
+    g.manual_seed(seed)
     indices = torch.randperm(len(complexes), generator=g)
+    
     
     train_size = int(0.8 * len(complexes))
     val_size = int(0.1 * len(complexes))
@@ -127,23 +129,20 @@ def plot_training_curves(curves, save_path=None):
         plt.savefig(save_path)
     plt.show()
 
-def main():
-    # Set seeds first thing
-    set_all_seeds(42)
+def run_trial(seed, hidden_channels=64, num_layers=4):
+    """Run a single trial with given seed."""
+    set_all_seeds(seed)
     
     # Process dataset
-    train_loader, val_loader, test_loader, num_atom_types, num_classes = process_dataset()
+    train_loader, val_loader, test_loader, num_atom_types, num_classes = process_dataset(seed=seed)
     
-    # print(f'Number of atom types: {num_atom_types}')
-    # print(f'Number of classes: {num_classes}')
-    
-    # Initialize model
-    model = EmbedSparseCIN(
+    # Train SparseCIN
+    cin_model = EmbedSparseCIN(
         atom_types=num_atom_types,
         out_size=1,
-        hidden_channels=64,
-        num_layers=4,
-        max_dim=2,  # 0: atoms, 1: bonds, 2: rings
+        hidden_channels=hidden_channels,
+        num_layers=num_layers,
+        max_dim=2,
         dropout=0.5,
         jump_mode='cat',
         nonlinearity='relu',
@@ -151,24 +150,138 @@ def main():
         final_readout='sum'
     )
     
-    # Training
-    best_model, curves = train(
-        model=model,
+    best_cin_model, cin_curves = train(
+        model=cin_model,
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader,
-        num_epochs=50,
+        num_epochs=25,
         learning_rate=0.01,
         scheduler_step_size=20,
         scheduler_gamma=0.5
     )
     
-    # Final evaluation
-    final_score = test(model, test_loader, best_model)
-    print(f'Final test score: {final_score:.4f}')
+    cin_score = test(cin_model, test_loader, best_cin_model)
     
-    # Plot training curves
-    plot_training_curves(curves)
+    # Train GIN
+    gin_model = EmbedGIN(
+        atom_types=num_atom_types,
+        bond_types=1,
+        out_size=1,
+        num_layers=num_layers,
+        hidden=hidden_channels,
+        dropout_rate=0.5,
+        nonlinearity='relu',
+        readout='sum',
+        train_eps=True,
+        apply_dropout_before='lin1'
+    )
+    
+    best_gin_model, gin_curves = train(
+        model=gin_model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        num_epochs=25,
+        learning_rate=0.01,
+        scheduler_step_size=20,
+        scheduler_gamma=0.5
+    )
+    
+    gin_score = test(gin_model, test_loader, best_gin_model)
+    
+    return {
+        'cin': {
+            'score': cin_score,
+            'curves': cin_curves
+        },
+        'gin': {
+            'score': gin_score,
+            'curves': gin_curves
+        }
+    }
+
+def main():
+    # Number of trials
+    n_trials = 25
+    seeds = range(51990, 51990 + n_trials)
+    
+    
+    # Store results for each trial
+    all_results = []
+    
+    # Run trials
+    for i, seed in enumerate(seeds):
+        print(f"\nTrial {i+1}/{n_trials} (seed={seed})")
+        trial_results = run_trial(seed)
+        all_results.append(trial_results)
+        
+        # Print running statistics
+        cin_scores = [r['cin']['score'] for r in all_results]
+        gin_scores = [r['gin']['score'] for r in all_results]
+        
+        print("\nCurrent Statistics:")
+        print(f"SparseCIN: {np.mean(cin_scores)*100:.1f} ± {np.std(cin_scores)*100:.1f}")
+        print(f"GIN: {np.mean(gin_scores)*100:.1f} ± {np.std(gin_scores)*100:.1f}")
+    
+    # Compute final statistics
+    cin_scores = [r['cin']['score'] for r in all_results]
+    gin_scores = [r['gin']['score'] for r in all_results]
+    
+    print("\nFinal Results:")
+    print(f"SparseCIN: {np.mean(cin_scores)*100:.1f} ± {np.std(cin_scores)*100:.1f}")
+    print(f"GIN: {np.mean(gin_scores)*100:.1f} ± {np.std(gin_scores)*100:.1f}")
+    
+    # Plot average learning curves
+    plot_average_curves(all_results)
+
+def plot_average_curves(all_results):
+    """Plot average training curves with standard deviation bands."""
+    plt.figure(figsize=(15, 5))
+    
+    metrics = ['train_loss', 'val', 'test']
+    titles = ['Training Loss', 'Validation Accuracy', 'Test Accuracy']
+    
+    # Calculate mean and std of best validation epochs
+    cin_best_epochs = [r['cin']['curves']['best_epoch'] for r in all_results]
+    gin_best_epochs = [r['gin']['curves']['best_epoch'] for r in all_results]
+    
+    for idx, (metric, title) in enumerate(zip(metrics, titles)):
+        plt.subplot(1, 3, idx+1)
+        
+        # Get curves for both models
+        for model, best_epochs, color in [('cin', cin_best_epochs, 'blue'), 
+                                        ('gin', gin_best_epochs, 'orange')]:
+            curves = [r[model]['curves'][metric] for r in all_results]
+            # Pad sequences to same length if necessary
+            max_len = max(len(c) for c in curves)
+            curves = [c + [c[-1]]*(max_len - len(c)) for c in curves]
+            
+            # Convert to numpy array
+            curves = np.array(curves)
+            mean = np.mean(curves, axis=0)
+            std = np.std(curves, axis=0)
+            
+            # Plot mean and std
+            epochs = range(len(mean))
+            plt.plot(epochs, mean, label=model.upper(), color=color)
+            plt.fill_between(epochs, mean-std, mean+std, alpha=0.2, color=color)
+            
+            # Plot vertical line for best epoch with std band
+            best_epoch_mean = np.mean(best_epochs)
+            best_epoch_std = np.std(best_epochs)
+            plt.axvline(x=best_epoch_mean, color=color, linestyle='--', 
+                       alpha=0.5, label=f'{model.upper()} Best: {best_epoch_mean:.1f}±{best_epoch_std:.1f}')
+            # plt.fill_betweenx(plt.ylim(), best_epoch_mean-best_epoch_std, 
+            #                 best_epoch_mean+best_epoch_std, color=color, alpha=0.1)
+        
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy' if title != 'Training Loss' else 'Loss')
+        plt.title(title)
+        plt.legend()
+    
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
     main()
