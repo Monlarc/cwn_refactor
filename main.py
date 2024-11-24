@@ -155,10 +155,11 @@ def run_trial(seed, hidden_channels=64, num_layers=4):
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader,
-        num_epochs=25,
+        num_epochs=50,
         learning_rate=0.01,
         scheduler_step_size=20,
-        scheduler_gamma=0.5
+        scheduler_gamma=0.5,
+        window_size=5
     )
     
     cin_score = test(cin_model, test_loader, best_cin_model)
@@ -182,10 +183,11 @@ def run_trial(seed, hidden_channels=64, num_layers=4):
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader,
-        num_epochs=25,
+        num_epochs=50,
         learning_rate=0.01,
         scheduler_step_size=20,
-        scheduler_gamma=0.5
+        scheduler_gamma=0.5,
+        window_size=5
     )
     
     gin_score = test(gin_model, test_loader, best_gin_model)

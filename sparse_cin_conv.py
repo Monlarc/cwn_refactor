@@ -21,6 +21,19 @@ class SparseCINCochainConv(nn.Module):
         super().__init__()
         self.dim = dim
         
+        # Message networks (new)
+        self.msg_up_nn = Sequential(
+            Linear(hidden_channels * 2, hidden_channels),  # Takes concatenated features
+            BN(hidden_channels),
+            nn.ReLU()
+        )
+        
+        self.msg_boundaries_nn = Sequential(
+            Linear(hidden_channels * 2, hidden_channels),
+            BN(hidden_channels),
+            nn.ReLU()
+        )
+        
         # Update networks
         self.update_up = Sequential(
             Linear(hidden_channels, hidden_channels),
@@ -55,26 +68,19 @@ class SparseCINCochainConv(nn.Module):
         """Forward pass of SparseCINCochainConv."""
         x = cochain.x
         
-        # print(f"\nIn SparseCINCochainConv (dim {self.dim}):")
-        # print(f"x shape: {x.shape}")
-        
         # Upper adjacency messages
         if cochain.up_index is not None:
-            # print(f"up_index shape: {cochain.up_index.shape}")
-            # print(f"up_index: {cochain.up_index}")
-            # print(f"up_index max values: {cochain.up_index.max(dim=1).values}")
-            source_features = x[cochain.up_index[1]]
-            # print(f"up source_features shape: {source_features.shape}")
+            # Process each message individually before aggregation
+            source_features = x[cochain.up_index[1]]  # j features
+            target_features = x[cochain.up_index[0]]  # i features
+            messages = self.msg_up_nn(torch.cat([target_features, source_features], dim=-1))
             
             out_up = scatter_add(
-                src=source_features,
+                src=messages,
                 index=cochain.up_index[0],
                 dim=0,
                 dim_size=x.size(0)
             )
-            # print(f"up out_up shape: {out_up.shape}")
-            # print(f"up out_up: {out_up}")
-
             out_up = out_up + (1 + self.eps1) * x
             out_up = self.update_up(out_up)
         else:
@@ -82,19 +88,14 @@ class SparseCINCochainConv(nn.Module):
         
         # Boundary messages
         if cochain.boundary_index is not None:
-            # print(f"boundary_index shape: {cochain.boundary_index.shape}")
-            # if self.dim > 1:
-                # print(f"boundary_index: {cochain.boundary_index}")
-                # print(f"boundary_index max values: {cochain.boundary_index.max(dim=1).values}")
-            source_features = cochain.boundary_attr[cochain.boundary_index[0]]
-            # source_features = x[cochain.boundary_index[0]]  # Get features from boundaries
-            target_indices = cochain.boundary_index[1]      # Aggregate to current cells
-            # print(f"boundary source_features shape: {source_features.shape}")
-            # print(f"target indices unique values: {cochain.boundary_index[0].unique()}")
+            # Process each message individually before aggregation
+            source_features = cochain.boundary_attr[cochain.boundary_index[0]]  # boundary features
+            target_features = x[cochain.boundary_index[1]]  # current cell features
+            messages = self.msg_boundaries_nn(torch.cat([target_features, source_features], dim=-1))
             
             out_boundary = scatter_add(
-                src=source_features,
-                index=target_indices,
+                src=messages,
+                index=cochain.boundary_index[1],
                 dim=0,
                 dim_size=x.size(0)
             )
